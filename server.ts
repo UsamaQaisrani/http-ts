@@ -2,6 +2,7 @@ import * as Constants from "./constants";
 import * as fs from "fs";
 import * as fPath from "path";
 import * as net from "net";
+import * as zlib from "zlib";
 
 export enum RequestType {
   GET = "GET",
@@ -13,13 +14,15 @@ export enum RequestType {
 export class Server {
   constructor() { }
 
-  parse(data: Buffer, args?: string[]): string {
+  parse(data: Buffer, args?: string[]): string | Buffer {
     const reqParts = data.toString().split(Constants.LineEnds.CRLF);
     const reqLine = reqParts[0];
     const reqLineParts = reqLine.split(" ");
     const type = reqLineParts[0] as RequestType;
     const path = reqLineParts[1];
-    const shouldCompress = reqParts.some((part) => part.startsWith(Constants.HeaderKeys.ACCEPT_ENCODING) && part.includes("gzip"));
+    const acceptEncoding = reqParts.find((p) => p.startsWith(Constants.HeaderKeys.ACCEPT_ENCODING));
+    const encodings = acceptEncoding?.split(":")[1]?.split(",") ?? [];
+    const shouldCompress = encodings.find((v) => v.trim() === "gzip");
 
     let statusLine: string = "";
     let headers: string[] = [];
@@ -93,14 +96,19 @@ export class Server {
     }
   }
 
-  respond(socket: net.Socket, response: string) {
+  respond(socket: net.Socket, response: string | Buffer) {
     socket.write(response);
     return;
   }
 
-  compress(statusLine: string, headers: string[], body: string): string {
-    headers.push(Constants.HeaderKeys.CONTENT_ENCODING + Constants.ContentTypes.GZIP)
-    headers[headers.length - 1] += Constants.LineEnds.END;
-    return statusLine + headers.join(Constants.LineEnds.CRLF) + body;
+  compress(statusLine: string, headers: string[], body: string): Buffer {
+    const compressedBody = zlib.gzipSync(Buffer.from(body, "utf8"));
+    const contentLengthIdx = headers.findIndex((h) => h.startsWith(Constants.HeaderKeys.CONTENT_LENGTH));
+    if (contentLengthIdx >= 0) {
+      headers[contentLengthIdx] = Constants.HeaderKeys.CONTENT_LENGTH + compressedBody.length;
+    }
+    headers.push(Constants.HeaderKeys.CONTENT_ENCODING + Constants.ContentTypes.GZIP);
+    const headerBlock = statusLine + headers.join(Constants.LineEnds.CRLF) + Constants.LineEnds.END;
+    return Buffer.concat([Buffer.from(headerBlock, "utf8"), compressedBody]);
   }
 }
