@@ -23,6 +23,7 @@ export const HeaderKeys = {
   ACCEPT: "Accept:",
   ACCEPT_ENCODING: "Accept-Encoding:",
   CONTENT_ENCODING: "Content-Encoding:",
+  CONNECTION: "Connection:",
 }
 
 export const ContentTypes = {

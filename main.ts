@@ -21,6 +21,6 @@ function closeSocket(socket: net.Socket) {
 
 function respondToRequest(data: Buffer, socket: net.Socket) {
   const server = new Server();
-  const response = server.parse(data, args);
-  server.respond(socket, response);
+  const { response, connectionClose } = server.parse(data, args);
+  server.respond(socket, response, connectionClose);
 }

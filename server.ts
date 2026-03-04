@@ -14,7 +14,7 @@ export enum RequestType {
 export class Server {
   constructor() { }
 
-  parse(data: Buffer, args?: string[]): string | Buffer {
+  parse(data: Buffer, args?: string[]): { response: string | Buffer; connectionClose: boolean } {
     const reqParts = data.toString().split(Constants.LineEnds.CRLF);
     const reqLine = reqParts[0];
     const reqLineParts = reqLine.split(" ");
@@ -23,11 +23,12 @@ export class Server {
     const acceptEncoding = reqParts.find((p) => p.startsWith(Constants.HeaderKeys.ACCEPT_ENCODING));
     const encodings = acceptEncoding?.split(":")[1]?.split(",") ?? [];
     const shouldCompress = encodings.find((v) => v.trim() === "gzip");
+    const connectionHeader = reqParts.find((p) => p.toLowerCase().startsWith("connection:"));
+    const connectionClose = connectionHeader?.split(":")[1]?.trim().toLowerCase() === "close";
 
     let statusLine: string = "";
     let headers: string[] = [];
     let body: string = "";
-
 
     switch (type) {
       case RequestType.GET: {
@@ -87,17 +88,26 @@ export class Server {
         statusLine = Constants.StatusLines.NOT_FOUND + Constants.LineEnds.END;
     }
 
+    if (connectionClose) {
+      if (path === Constants.PathK.ROOT && headers.length === 0) {
+        statusLine = Constants.StatusLines.OK + Constants.LineEnds.CRLF;
+      }
+      headers.push(Constants.HeaderKeys.CONNECTION + " close");
+    }
+
     if (shouldCompress) {
-      return this.compress(statusLine, headers, body);
+      return { response: this.compress(statusLine, headers, body), connectionClose };
     }
     else {
       headers[headers.length - 1] += Constants.LineEnds.END;
-      return statusLine + headers.join(Constants.LineEnds.CRLF) + body;
+      return { response: statusLine + headers.join(Constants.LineEnds.CRLF) + body, connectionClose };
     }
   }
 
-  respond(socket: net.Socket, response: string | Buffer) {
-    socket.write(response);
+  respond(socket: net.Socket, response: string | Buffer, connectionClose?: boolean) {
+    socket.write(response, () => {
+      if (connectionClose) socket.end();
+    });
     return;
   }
 
