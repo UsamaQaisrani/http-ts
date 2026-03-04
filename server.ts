@@ -19,68 +19,88 @@ export class Server {
     const reqLineParts = reqLine.split(" ");
     const type = reqLineParts[0] as RequestType;
     const path = reqLineParts[1];
+    const shouldCompress = reqParts.some((part) => part.startsWith(Constants.HeaderKeys.ACCEPT_ENCODING) && part.includes("gzip"));
+
+    let statusLine: string = "";
+    let headers: string[] = [];
+    let body: string = "";
+
 
     switch (type) {
-      case RequestType.GET:
+      case RequestType.GET: {
         if (path === Constants.PathK.ROOT) {
-          const response = Constants.StatusLines.OK + Constants.LineEnds.END;
-          return response;
+          statusLine = Constants.StatusLines.OK + Constants.LineEnds.END;
         }
 
         else if (path.startsWith(Constants.PathK.ECHO)) {
           const content = path.split(Constants.PathK.ECHO + "/")[1];
-          const requestLine = Constants.StatusLines.OK + Constants.LineEnds.CRLF;
-          const headers = Constants.HeaderKeys.CONTENT_TYPE + Constants.ContentTypes.TEXT + Constants.LineEnds.CRLF;
-          const body = Constants.HeaderKeys.CONTENT_LENGTH + content.length + Constants.LineEnds.END + content;
-          return requestLine + headers + body;
+          statusLine = Constants.StatusLines.OK + Constants.LineEnds.CRLF;
+          headers.push(Constants.HeaderKeys.CONTENT_TYPE + Constants.ContentTypes.TEXT);
+          headers.push(Constants.HeaderKeys.CONTENT_LENGTH + content.length);
+          body = content;
         }
 
         else if (path === Constants.PathK.USER_AGENT) {
           const userAgentHeader = reqParts.find((part) => part.startsWith(Constants.HeaderKeys.USER_AGENT));
           const userAgentParts = userAgentHeader?.split(" ");
           const agent = userAgentParts?.slice(1).join(" ") || "Unknown";
-          const requestLine = Constants.StatusLines.OK + Constants.LineEnds.CRLF;
-          const headers = Constants.HeaderKeys.CONTENT_TYPE + Constants.ContentTypes.TEXT + Constants.LineEnds.CRLF;
-          const body = Constants.HeaderKeys.CONTENT_LENGTH + agent.length + Constants.LineEnds.END + agent;
-          return requestLine + headers + body;
+
+          statusLine = Constants.StatusLines.OK + Constants.LineEnds.CRLF;
+          headers.push(Constants.HeaderKeys.CONTENT_TYPE + Constants.ContentTypes.TEXT);
+          headers.push(Constants.HeaderKeys.CONTENT_LENGTH + agent.length);
+          body = agent;
         }
 
         else if (path.startsWith(Constants.PathK.FILES)) {
           const filePath = path.split(Constants.PathK.FILES + "/")[1];
           const fullFilePath = fPath.join(args ? args[1] : "", filePath);
           if (fs.existsSync(fullFilePath)) {
-
             const content = fs.readFileSync(fullFilePath);
-            const requestLine = Constants.StatusLines.OK + Constants.LineEnds.CRLF;
-            const headers = Constants.HeaderKeys.CONTENT_TYPE + Constants.ContentTypes.OCTET_STREAM + Constants.LineEnds.CRLF;
-            const body = Constants.HeaderKeys.CONTENT_LENGTH + content.length + Constants.LineEnds.END + content;
-            return requestLine + headers + body;
+            statusLine = Constants.StatusLines.OK + Constants.LineEnds.CRLF;
+            headers.push(Constants.HeaderKeys.CONTENT_TYPE + Constants.ContentTypes.OCTET_STREAM);
+            headers.push(Constants.HeaderKeys.CONTENT_LENGTH + content.length);
+            body = content.toString();
           }
           else {
-            return Constants.StatusLines.NOT_FOUND + Constants.LineEnds.END;
+            statusLine = Constants.StatusLines.NOT_FOUND + Constants.LineEnds.END;
           }
         }
         else {
-          return Constants.StatusLines.NOT_FOUND + Constants.LineEnds.END;
+          statusLine = Constants.StatusLines.NOT_FOUND + Constants.LineEnds.END;
         }
+        break
+      }
       case RequestType.POST: {
         if (path.startsWith(Constants.PathK.FILES)) {
           const body: string = reqParts[reqParts.length - 1];
           const filePath = path.split(Constants.PathK.FILES + "/")[1];
           const fullFilePath = fPath.join(args ? args[1] : "", filePath);
           fs.writeFileSync(fullFilePath, body);
-          const response = Constants.StatusLines.CREATED + Constants.LineEnds.END;
-          return response;
+          statusLine = Constants.StatusLines.CREATED + Constants.LineEnds.END;
         }
-        return "";
+        break
       }
       default:
-        return Constants.StatusLines.NOT_FOUND + Constants.LineEnds.END;
+        statusLine = Constants.StatusLines.NOT_FOUND + Constants.LineEnds.END;
+    }
+
+    if (shouldCompress) {
+      return this.compress(statusLine, headers, body);
+    }
+    else {
+      headers[headers.length - 1] += Constants.LineEnds.END;
+      return statusLine + headers.join(Constants.LineEnds.CRLF) + body;
     }
   }
 
   respond(socket: net.Socket, response: string) {
     socket.write(response);
     return;
+  }
+
+  compress(statusLine: string, headers: string[], body: string): string {
+    headers.push(Constants.HeaderKeys.CONTENT_ENCODING + Constants.ContentTypes.GZIP)
+    headers[headers.length - 1] += Constants.LineEnds.END;
+    return statusLine + headers.join(Constants.LineEnds.CRLF) + body;
   }
 }

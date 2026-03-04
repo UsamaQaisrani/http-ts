@@ -20,9 +20,13 @@ export const HeaderKeys = {
   CONTENT_TYPE: "Content-Type:",
   CONTENT_LENGTH: "Content-Length:",
   USER_AGENT: "User-Agent:",
+  ACCEPT: "Accept:",
+  ACCEPT_ENCODING: "Accept-Encoding:",
+  CONTENT_ENCODING: "Content-Encoding:",
 }
 
 export const ContentTypes = {
   TEXT: "text/plain",
   OCTET_STREAM: "application/octet-stream",
+  GZIP: "gzip",
 }

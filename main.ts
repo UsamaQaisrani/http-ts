@@ -3,7 +3,6 @@ import * as process from "process";
 import { Server } from "./server";
 
 const args = process.argv.slice(2);
-console.log("Arguments:", args);
 const server = net.createServer((socket) => {
   socket.on("close", () => {
     closeSocket(socket);
