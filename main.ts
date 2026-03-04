@@ -23,7 +23,6 @@ function respondToRequest(data: Buffer, socket: net.Socket) {
   const reqLineParts = reqLine.split(" ");
   const method = reqLineParts[0];
   const path = reqLineParts[1];
-  console.log(`Method: ${method}, Path: ${path}`);
   if (path === "/") {
     socket.write("HTTP/1.1 200 OK\r\n\r\n");
   }
@@ -35,7 +34,14 @@ function respondToRequest(data: Buffer, socket: net.Socket) {
     socket.write(requestLine + headers + body);
   }
   else if (path.includes("/user-agent")) {
+    const userAgentHeader = reqParts.find((part) => part.startsWith("User-Agent:"));
+    const userAgentParts = userAgentHeader?.split(" ");
+    const agent = userAgentParts?.slice(1).join(" ") || "Unknown";
 
+    const requestLine = "HTTP/1.1 200 OK" + Constants.CRLF;
+    const headers = "Content-Type: text/plain" + Constants.CRLF;
+    const body = "Content-Length:" + agent.length + Constants.CRLF + Constants.CRLF + agent;
+    socket.write(requestLine + headers + body); 
   }
   else {
     socket.write("HTTP/1.1 404 Not Found\r\n\r\n");
